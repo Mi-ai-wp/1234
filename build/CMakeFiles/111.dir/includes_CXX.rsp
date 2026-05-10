@@ -1,0 +1,1 @@
+-I"D:/qt project/111/build/111_autogen/include" -isystem D:/qt/6.11.0/mingw_64/include/QtCore -isystem D:/qt/6.11.0/mingw_64/include -isystem "D:/qt/6.11.0/mingw_64/mkspecs/win32-g++" -isystem D:/qt/6.11.0/mingw_64/include/QtWidgets -isystem D:/qt/6.11.0/mingw_64/include/QtGui

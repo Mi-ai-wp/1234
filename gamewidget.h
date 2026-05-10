@@ -148,6 +148,8 @@ private:
 
     QSet<int> m_pressedKeys;
     QPointF m_mousePos;
+    float m_moveDirX = 1.0f;
+    float m_moveDirY = 0.0f;
 
     QTimer *m_loopTimer = nullptr;
     QElapsedTimer m_gameTimer;
@@ -161,6 +163,12 @@ private:
 
     QPixmap m_lightOverlay;
     QPixmap m_glowOverlay;
+
+    QPixmap m_ultImage1;
+    QPixmap m_ultImage2;
+    QPixmap m_ultImage3;
+    int m_ultImageDisplayTier = 0;
+    float m_ultImageDisplayTimer = 0.0f;
 
     QRectF m_startButtonRect;
     QRectF m_returnButtonRect;
@@ -184,6 +192,7 @@ private:
     void renderPlayer(QPainter &painter);
     void renderLightOverlay(QPainter &painter);
     void renderHUD(QPainter &painter);
+    void renderUltImage(QPainter &painter);
     void renderStartScreen(QPainter &painter);
     void renderEndScreen(QPainter &painter);
     void renderUpgradePanel(QPainter &painter);

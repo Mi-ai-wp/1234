@@ -1,4 +1,6 @@
 #include "gamewidget.h"
+#include <QCoreApplication>
+#include <QDir>
 
 GameWidget::GameWidget(QWidget *parent)
     : QWidget(parent)
@@ -8,6 +10,13 @@ GameWidget::GameWidget(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(800, 600);
     setContextMenuPolicy(Qt::NoContextMenu);
+
+    QString tpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/../tp");
+    if (!QDir(tpDir).exists())
+        tpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/../../tp");
+    m_ultImage1.load(tpDir + QStringLiteral("/1.jpg"), "JPG");
+    m_ultImage2.load(tpDir + QStringLiteral("/2.jpg"), "JPG");
+    m_ultImage3.load(tpDir + QStringLiteral("/3.jpg"), "JPG");
 
     m_loopTimer = new QTimer(this);
     connect(m_loopTimer, &QTimer::timeout, this, &GameWidget::gameLoop);
@@ -30,6 +39,10 @@ void GameWidget::resetGame()
     m_monsterSpawnTimer = 0.0f;
     m_itemSpawnTimer = 0.0f;
     m_pressedKeys.clear();
+    m_moveDirX = 1.0f;
+    m_moveDirY = 0.0f;
+    m_ultImageDisplayTier = 0;
+    m_ultImageDisplayTimer = 0.0f;
 }
 
 void GameWidget::gameLoop()
@@ -45,6 +58,13 @@ void GameWidget::gameLoop()
     {
         m_survivalTime += dt;
         updateGame(dt);
+    }
+
+    if (m_ultImageDisplayTimer > 0.0f)
+    {
+        m_ultImageDisplayTimer -= dt;
+        if (m_ultImageDisplayTimer <= 0.0f)
+            m_ultImageDisplayTier = 0;
     }
 
     update();
@@ -90,29 +110,29 @@ void GameWidget::updateGame(float dt)
 
 void GameWidget::updatePlayer(float dt)
 {
-    float moveX = 0.0f, moveY = 0.0f;
+    float inputX = 0.0f, inputY = 0.0f;
     if (m_pressedKeys.contains(Qt::Key_W) || m_pressedKeys.contains(Qt::Key_Up))
-        moveY -= 1.0f;
+        inputY -= 1.0f;
     if (m_pressedKeys.contains(Qt::Key_S) || m_pressedKeys.contains(Qt::Key_Down))
-        moveY += 1.0f;
+        inputY += 1.0f;
     if (m_pressedKeys.contains(Qt::Key_A) || m_pressedKeys.contains(Qt::Key_Left))
-        moveX -= 1.0f;
+        inputX -= 1.0f;
     if (m_pressedKeys.contains(Qt::Key_D) || m_pressedKeys.contains(Qt::Key_Right))
-        moveX += 1.0f;
+        inputX += 1.0f;
 
-    float len = std::sqrt(moveX * moveX + moveY * moveY);
-    if (len > 0.01f)
+    float inputLen = std::sqrt(inputX * inputX + inputY * inputY);
+    if (inputLen > 0.01f)
     {
-        moveX /= len;
-        moveY /= len;
+        m_moveDirX = inputX / inputLen;
+        m_moveDirY = inputY / inputLen;
     }
 
     float currentSpeed = m_player.speed;
     if (m_player.speedBoostActive)
         currentSpeed *= 2.0f;
 
-    m_player.x += moveX * currentSpeed * UNIT_PX * dt;
-    m_player.y += moveY * currentSpeed * UNIT_PX * dt;
+    m_player.x += m_moveDirX * currentSpeed * UNIT_PX * dt;
+    m_player.y += m_moveDirY * currentSpeed * UNIT_PX * dt;
 
     if (m_player.attackCooldownTimer > 0.0f)
         m_player.attackCooldownTimer -= dt;
@@ -520,6 +540,9 @@ void GameWidget::keyPressEvent(QKeyEvent *event)
                 m_player.ultChargesUsed = charges;
                 m_player.ultCharges = 0;
 
+                m_ultImageDisplayTier = charges;
+                m_ultImageDisplayTimer = 2.0f;
+
                 if (charges == 2)
                 {
                     for (auto &m : m_monsters)
@@ -682,6 +705,7 @@ void GameWidget::renderGame(QPainter &painter)
     renderMonsters(painter);
     renderPlayer(painter);
     renderLightOverlay(painter);
+    renderUltImage(painter);
 
     for (const auto &m : m_monsters)
     {
@@ -696,6 +720,7 @@ void GameWidget::renderGame(QPainter &painter)
         }
     }
 
+    renderLightOverlay(painter);
     renderHUD(painter);
 }
 
@@ -923,7 +948,7 @@ void GameWidget::renderLightOverlay(QPainter &painter)
         m_glowOverlay = QPixmap(w, h);
     }
 
-    m_lightOverlay.fill(QColor(0, 0, 0, 175));
+    m_lightOverlay.fill(QColor(0, 0, 0, 80));
 
     QPointF playerScreen = worldToScreen(m_player.x, m_player.y);
 
@@ -1094,6 +1119,36 @@ void GameWidget::renderHUD(QPainter &painter)
 
     painter.drawText(QRectF(rightX, y, 240, lineH), Qt::AlignRight,
                      QStringLiteral("%1  充能: %2").arg(ultStr, charges));
+}
+
+void GameWidget::renderUltImage(QPainter &painter)
+{
+    if (m_ultImageDisplayTimer <= 0.0f || m_ultImageDisplayTier <= 0)
+        return;
+
+    QPixmap *pixmap = nullptr;
+    switch (m_ultImageDisplayTier)
+    {
+    case 1: pixmap = &m_ultImage1; break;
+    case 2: pixmap = &m_ultImage2; break;
+    case 3: pixmap = &m_ultImage3; break;
+    default: return;
+    }
+
+    if (!pixmap || pixmap->isNull())
+        return;
+
+    int w = width();
+    int h = height();
+    int margin = 20;
+    int targetW = 350;
+
+    QImage img = pixmap->toImage();
+    QImage scaled = img.scaledToWidth(targetW, Qt::SmoothTransformation);
+    int x = w - scaled.width() - margin;
+    int y = h - scaled.height() - margin;
+
+    painter.drawImage(x, y, scaled);
 }
 
 void GameWidget::renderStartScreen(QPainter &painter)
