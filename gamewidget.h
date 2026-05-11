@@ -53,7 +53,7 @@ constexpr int ITEMS_PER_SPAWN = 2;
 constexpr float PI = 3.14159265358979323846f;
 
 enum class TileType { Ground, Dark, Cracked, Rune };
-enum class GameState { Start, Playing, Upgrade, End };
+enum class GameState { Start, CharSelect, Playing, Upgrade, End };
 
 struct Player
 {
@@ -93,6 +93,7 @@ struct Monster
     float attackTimer = 0.0f;
     float attackInterval = 2.0f;
     bool inLight = false;
+    float timeOutsideView = 0.0f;
 };
 
 struct Spike
@@ -170,8 +171,27 @@ private:
     int m_ultImageDisplayTier = 0;
     float m_ultImageDisplayTimer = 0.0f;
 
+    QPixmap m_monsterImage1;
+    QPixmap m_monsterImage2;
+    QPixmap m_monsterImage3;
+
+    QPixmap m_charKongLeft;
+    QPixmap m_charKongRight;
+    QPixmap m_charYingLeft;
+    QPixmap m_charYingRight;
+    QPixmap m_startBg;
+    int m_selectedCharacter = 0;
+
+    int m_ultUpgradeLevel = 0;
+    int m_spikeUpgradeLevel = 0;
+    float m_gameElapsedTime = 0.0f;
+    float m_nextSpikeUpgradeTime = 120.0f;
+
     QRectF m_startButtonRect;
     QRectF m_returnButtonRect;
+    QRectF m_endButtonRect;
+    QRectF m_charSelectRect1;
+    QRectF m_charSelectRect2;
 
     void resetGame();
     void updateGame(float dt);
@@ -194,6 +214,7 @@ private:
     void renderHUD(QPainter &painter);
     void renderUltImage(QPainter &painter);
     void renderStartScreen(QPainter &painter);
+    void renderCharSelect(QPainter &painter);
     void renderEndScreen(QPainter &painter);
     void renderUpgradePanel(QPainter &painter);
 

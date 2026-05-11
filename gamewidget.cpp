@@ -18,6 +18,17 @@ GameWidget::GameWidget(QWidget *parent)
     m_ultImage2.load(tpDir + QStringLiteral("/2.jpg"), "JPG");
     m_ultImage3.load(tpDir + QStringLiteral("/3.jpg"), "JPG");
 
+    m_monsterImage1.load(tpDir + QStringLiteral("/8.jpg"), "JPG");
+    m_monsterImage2.load(tpDir + QStringLiteral("/9.jpg"), "JPG");
+    m_monsterImage3.load(tpDir + QStringLiteral("/10.jpg"), "JPG");
+
+    m_charKongLeft.load(tpDir + QStringLiteral("/6.jpg"), "JPG");
+    m_charKongRight.load(tpDir + QStringLiteral("/7.jpg"), "JPG");
+    m_charYingLeft.load(tpDir + QStringLiteral("/4.jpg"), "JPG");
+    m_charYingRight.load(tpDir + QStringLiteral("/5.jpg"), "JPG");
+
+    m_startBg.load(tpDir + QStringLiteral("/11.jpg"), "JPG");
+
     m_loopTimer = new QTimer(this);
     connect(m_loopTimer, &QTimer::timeout, this, &GameWidget::gameLoop);
     m_loopTimer->start(16);
@@ -43,6 +54,10 @@ void GameWidget::resetGame()
     m_moveDirY = 0.0f;
     m_ultImageDisplayTier = 0;
     m_ultImageDisplayTimer = 0.0f;
+    m_ultUpgradeLevel = 0;
+    m_spikeUpgradeLevel = 0;
+    m_gameElapsedTime = 0.0f;
+    m_nextSpikeUpgradeTime = 120.0f;
 }
 
 void GameWidget::gameLoop()
@@ -72,6 +87,13 @@ void GameWidget::gameLoop()
 
 void GameWidget::updateGame(float dt)
 {
+    m_gameElapsedTime += dt;
+    if (m_spikeUpgradeLevel < 3 && m_gameElapsedTime >= m_nextSpikeUpgradeTime)
+    {
+        m_spikeUpgradeLevel++;
+        m_nextSpikeUpgradeTime += 120.0f;
+    }
+
     updatePlayer(dt);
     updateMonsters(dt);
     updateSpikes(dt);
@@ -93,7 +115,8 @@ void GameWidget::updateGame(float dt)
     checkLevelUp();
 
     m_monsterSpawnTimer += dt;
-    float spawnInterval = std::max(0.5f, 2.0f - m_survivalTime / 120.0f);
+    float cappedTime = std::min(m_survivalTime, 360.0f);
+    float spawnInterval = std::max(0.5f, 2.0f - cappedTime / 120.0f);
     if (m_monsterSpawnTimer >= spawnInterval)
     {
         m_monsterSpawnTimer -= spawnInterval;
@@ -101,9 +124,15 @@ void GameWidget::updateGame(float dt)
     }
 
     m_itemSpawnTimer += dt;
-    if (m_itemSpawnTimer >= ITEM_SPAWN_INTERVAL)
+    float itemMult = 1.0f;
+    if (m_survivalTime > 180.0f)
+        itemMult = 1.5f;
+    if (m_survivalTime > 360.0f)
+        itemMult = 2.25f;
+    float itemInterval = ITEM_SPAWN_INTERVAL / itemMult;
+    if (m_itemSpawnTimer >= itemInterval)
     {
-        m_itemSpawnTimer -= ITEM_SPAWN_INTERVAL;
+        m_itemSpawnTimer -= itemInterval;
         spawnItems();
     }
 }
@@ -157,7 +186,9 @@ void GameWidget::updatePlayer(float dt)
         if (m_player.ultTimer <= 0.0f)
         {
             m_player.ultActive = false;
-            m_player.ultCooldownTimer = ULT_COOLDOWN;
+            float cd = ULT_COOLDOWN - m_ultUpgradeLevel * 2.0f;
+            if (cd < 2.0f) cd = 2.0f;
+            m_player.ultCooldownTimer = cd;
         }
     }
     else if (m_player.ultCooldownTimer > 0.0f)
@@ -300,6 +331,11 @@ void GameWidget::updateMonsters(float dt)
         }
         m.inLight = inLight;
 
+        if (inLight)
+            m.timeOutsideView = 0.0f;
+        else
+            m.timeOutsideView += dt;
+
         if (m.tier <= 2 && !inLight && dist > 0.01f)
         {
             float dirX = m_player.x - m.x;
@@ -315,21 +351,32 @@ void GameWidget::updateMonsters(float dt)
             if (m.attackTimer >= m.attackInterval && dist <= 3.0f * UNIT_PX)
             {
                 m.attackTimer = 0.0f;
-                Spike spike;
-                spike.x = m.x;
-                spike.y = m.y;
-                float spikeSpeed = 300.0f;
-                float angleToPlayer = std::atan2(m_player.y - m.y, m_player.x - m.x);
-                spike.vx = std::cos(angleToPlayer) * spikeSpeed;
-                spike.vy = std::sin(angleToPlayer) * spikeSpeed;
-                spike.damage = m.damage;
-                m_spikes.push_back(spike);
+                int spikeCount = 1 + m_spikeUpgradeLevel;
+                float spikeSpeed = 300.0f + m_spikeUpgradeLevel * 60.0f;
+                float baseAngle = std::atan2(m_player.y - m.y, m_player.x - m.x);
+
+                for (int s = 0; s < spikeCount; ++s)
+                {
+                    Spike spike;
+                    spike.x = m.x;
+                    spike.y = m.y;
+                    float spreadAngle = baseAngle;
+                    if (spikeCount > 1)
+                    {
+                        float spread = 0.15f * (s - (spikeCount - 1) / 2.0f);
+                        spreadAngle = baseAngle + spread;
+                    }
+                    spike.vx = std::cos(spreadAngle) * spikeSpeed;
+                    spike.vy = std::sin(spreadAngle) * spikeSpeed;
+                    spike.damage = m.damage;
+                    m_spikes.push_back(spike);
+                }
             }
         }
     }
 
     m_monsters.erase(std::remove_if(m_monsters.begin(), m_monsters.end(), [this](const Monster &m) {
-        return distanceToPlayer(m.x, m.y) > MONSTER_DESPAWN_RADIUS;
+        return distanceToPlayer(m.x, m.y) > MONSTER_DESPAWN_RADIUS || m.timeOutsideView > 30.0f;
     }), m_monsters.end());
 }
 
@@ -355,13 +402,13 @@ void GameWidget::spawnMonsters()
     float tier2Chance = 0.0f;
     float tier3Chance = 0.0f;
     if (m_survivalTime > 30.0f)
-        tier2Chance = std::min(0.35f, (m_survivalTime - 30.0f) / 300.0f);
+        tier2Chance = std::min(0.40f, (m_survivalTime - 30.0f) / 250.0f);
     if (m_survivalTime > 120.0f)
         tier3Chance = std::min(0.25f, (m_survivalTime - 120.0f) / 600.0f);
 
     std::uniform_real_distribution<float> typeDist(0.0f, 1.0f);
     std::uniform_real_distribution<float> angleDist(0.0f, 2.0f * PI);
-    std::uniform_real_distribution<float> radiusDist(3.5f * UNIT_PX, MONSTER_SPAWN_RADIUS);
+    std::uniform_real_distribution<float> radiusDist(LIGHT_RADIUS + 1.5f * UNIT_PX, MONSTER_SPAWN_RADIUS);
 
     for (int i = 0; i < count; ++i)
     {
@@ -457,6 +504,8 @@ void GameWidget::generateUpgradeOptions()
         available.push_back(1);
     if (m_player.speed < MAX_SPEED)
         available.push_back(2);
+    if (m_ultUpgradeLevel < 5)
+        available.push_back(3);
 
     if (available.empty())
         return;
@@ -475,12 +524,16 @@ void GameWidget::generateUpgradeOptions()
             opt.description = QStringLiteral("当前：%1 → %2").arg(m_player.attackDamage).arg(m_player.attackDamage + 1);
             break;
         case 1:
-            opt.name = QStringLiteral("光照角度 +30°");
+            opt.name = QStringLiteral("灯照角度 +30°");
             opt.description = QStringLiteral("当前：%1° → %2°").arg(m_player.lightAngle).arg(m_player.lightAngle + 30);
             break;
         case 2:
             opt.name = QStringLiteral("移动速度 +1");
             opt.description = QStringLiteral("当前：%1 → %2").arg(m_player.speed).arg(m_player.speed + 1);
+            break;
+        case 3:
+            opt.name = QStringLiteral("大招强化 Lv.%1").arg(m_ultUpgradeLevel + 1);
+            opt.description = QStringLiteral("CD-2s | 一段护盾+1s | 二段半径+1 | 三段持续+1s半径+0.5");
             break;
         }
         m_upgradeOptions.push_back(opt);
@@ -497,6 +550,7 @@ void GameWidget::applyUpgrade(int index)
     case 0: m_player.attackDamage += DAMAGE_INCREMENT; break;
     case 1: m_player.lightAngle += LIGHT_ANGLE_INCREMENT; break;
     case 2: m_player.speed += SPEED_INCREMENT; break;
+    case 3: m_ultUpgradeLevel++; break;
     }
 }
 
@@ -510,6 +564,9 @@ void GameWidget::paintEvent(QPaintEvent *event)
     {
     case GameState::Start:
         renderStartScreen(painter);
+        break;
+    case GameState::CharSelect:
+        renderCharSelect(painter);
         break;
     case GameState::Playing:
     case GameState::Upgrade:
@@ -536,18 +593,29 @@ void GameWidget::keyPressEvent(QKeyEvent *event)
             {
                 int charges = m_player.ultCharges;
                 m_player.ultActive = true;
-                m_player.ultTimer = ULT_DURATION;
                 m_player.ultChargesUsed = charges;
                 m_player.ultCharges = 0;
+
+                float ultDuration = ULT_DURATION;
+                if (charges == 1)
+                    ultDuration += m_ultUpgradeLevel * 1.0f;
+                else if (charges >= 3)
+                    ultDuration += m_ultUpgradeLevel * 1.0f;
+                m_player.ultTimer = ultDuration;
+
+                float effectiveCD = ULT_COOLDOWN - m_ultUpgradeLevel * 2.0f;
+                if (effectiveCD < 2.0f)
+                    effectiveCD = 2.0f;
 
                 m_ultImageDisplayTier = charges;
                 m_ultImageDisplayTimer = 2.0f;
 
                 if (charges == 2)
                 {
+                    float aoeRadius = 3.0f * UNIT_PX + m_ultUpgradeLevel * 1.0f * UNIT_PX;
                     for (auto &m : m_monsters)
                     {
-                        if (distanceToPlayer(m.x, m.y) <= 3.0f * UNIT_PX)
+                        if (distanceToPlayer(m.x, m.y) <= aoeRadius)
                             m.hp -= 3.0f;
                     }
                 }
@@ -572,6 +640,25 @@ void GameWidget::mousePressEvent(QMouseEvent *event)
     {
         if (m_startButtonRect.contains(event->pos()))
         {
+            m_state = GameState::CharSelect;
+        }
+        return;
+    }
+
+    if (m_state == GameState::CharSelect)
+    {
+        if (m_charSelectRect1.contains(event->pos()))
+        {
+            m_selectedCharacter = 1;
+            resetGame();
+            m_state = GameState::Playing;
+            m_gameTimer.restart();
+            m_lastFrameTime = m_gameTimer.elapsed();
+            m_survivalTime = 0.0f;
+        }
+        else if (m_charSelectRect2.contains(event->pos()))
+        {
+            m_selectedCharacter = 2;
             resetGame();
             m_state = GameState::Playing;
             m_gameTimer.restart();
@@ -584,7 +671,17 @@ void GameWidget::mousePressEvent(QMouseEvent *event)
     if (m_state == GameState::End)
     {
         if (m_returnButtonRect.contains(event->pos()))
+        {
             m_state = GameState::Start;
+            m_selectedCharacter = 0;
+        }
+        return;
+    }
+
+    if ((m_state == GameState::Playing || m_state == GameState::Upgrade)
+        && m_endButtonRect.contains(event->pos()))
+    {
+        m_state = GameState::End;
         return;
     }
 
@@ -703,8 +800,8 @@ void GameWidget::renderGame(QPainter &painter)
     renderItems(painter);
     renderSpikes(painter);
     renderMonsters(painter);
-    renderPlayer(painter);
     renderLightOverlay(painter);
+    renderPlayer(painter);
     renderUltImage(painter);
 
     for (const auto &m : m_monsters)
@@ -712,7 +809,7 @@ void GameWidget::renderGame(QPainter &painter)
         if (m.inLight)
         {
             QPointF screen = worldToScreen(m.x, m.y);
-            float radius = (m.tier == 3) ? 22.0f : (m.tier == 2) ? 16.0f : 12.0f;
+            float radius = (m.tier == 3) ? 26.0f : (m.tier == 2) ? 20.0f : 14.0f;
             QPen highlightPen(QColor(255, 255, 100, 180), 3.0f);
             painter.setPen(highlightPen);
             painter.setBrush(Qt::NoBrush);
@@ -811,34 +908,49 @@ void GameWidget::renderMonsters(QPainter &painter)
     {
         QPointF screen = worldToScreen(m.x, m.y);
         float radius;
-        QColor bodyColor, borderColor;
+        QPixmap *img = nullptr;
 
         switch (m.tier)
         {
         case 1:
-            radius = 12.0f;
-            bodyColor = QColor(180, 50, 50);
-            borderColor = QColor(220, 80, 80);
+            radius = 30.0f;
+            img = &m_monsterImage1;
             break;
         case 2:
-            radius = 16.0f;
-            bodyColor = QColor(200, 100, 30);
-            borderColor = QColor(240, 140, 50);
+            radius = 45.0f;
+            img = &m_monsterImage2;
             break;
         case 3:
-            radius = 22.0f;
-            bodyColor = QColor(120, 40, 160);
-            borderColor = QColor(160, 80, 200);
+            radius = 60.0f;
+            img = &m_monsterImage3;
             break;
         default:
-            radius = 12.0f;
-            bodyColor = QColor(180, 50, 50);
-            borderColor = QColor(220, 80, 80);
+            radius = 30.0f;
+            img = &m_monsterImage1;
         }
 
-        painter.setPen(QPen(borderColor, 2.0f));
-        painter.setBrush(bodyColor);
-        painter.drawEllipse(screen, radius, radius);
+        if (img && !img->isNull())
+        {
+            QImage scaled = img->toImage().scaled(
+                static_cast<int>(radius * 2), static_cast<int>(radius * 2),
+                Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            painter.drawImage(QPointF(screen.x() - scaled.width() / 2.0,
+                                      screen.y() - scaled.height() / 2.0), scaled);
+        }
+        else
+        {
+            QColor bodyColor, borderColor;
+            switch (m.tier)
+            {
+            case 1: bodyColor = QColor(180, 50, 50); borderColor = QColor(220, 80, 80); break;
+            case 2: bodyColor = QColor(200, 100, 30); borderColor = QColor(240, 140, 50); break;
+            case 3: bodyColor = QColor(120, 40, 160); borderColor = QColor(160, 80, 200); break;
+            default: bodyColor = QColor(180, 50, 50); borderColor = QColor(220, 80, 80);
+            }
+            painter.setPen(QPen(borderColor, 2.0f));
+            painter.setBrush(bodyColor);
+            painter.drawEllipse(screen, radius, radius);
+        }
 
         float hpRatio = m.hp / m.maxHp;
         float barW = radius * 2.0f;
@@ -851,12 +963,6 @@ void GameWidget::renderMonsters(QPainter &painter)
         painter.drawRoundedRect(QRectF(barX, barY, barW, barH), 2.0, 2.0);
         painter.setBrush(QColor(200, 50, 50));
         painter.drawRoundedRect(QRectF(barX, barY, barW * hpRatio, barH), 2.0, 2.0);
-
-        painter.setPen(Qt::white);
-        QFont tierFont(QStringLiteral("Arial"), 8);
-        painter.setFont(tierFont);
-        painter.drawText(QRectF(screen.x() - radius, screen.y() - radius, radius * 2.0f, radius * 2.0f),
-                         Qt::AlignCenter, QString::number(m.tier));
     }
 }
 
@@ -911,7 +1017,7 @@ void GameWidget::renderPlayer(QPainter &painter)
     {
         painter.setPen(QPen(QColor(255, 255, 100, 180), 3.0f));
         painter.setBrush(Qt::NoBrush);
-        painter.drawEllipse(screen, radius + 10.0f, radius + 10.0f);
+        painter.drawEllipse(screen, radius + 30.0f, radius + 30.0f);
     }
 
     if (m_player.ultActive && m_player.ultChargesUsed >= 3)
@@ -921,9 +1027,36 @@ void GameWidget::renderPlayer(QPainter &painter)
         painter.drawEllipse(screen, LIGHT_RADIUS, LIGHT_RADIUS);
     }
 
-    painter.setPen(QPen(QColor(150, 200, 255), 2.0f));
-    painter.setBrush(QColor(60, 120, 200));
-    painter.drawEllipse(screen, radius, radius);
+    QPixmap *playerImg = nullptr;
+    if (m_selectedCharacter == 1)
+        playerImg = (m_moveDirX < 0.0f) ? &m_charKongLeft : &m_charKongRight;
+    else if (m_selectedCharacter == 2)
+        playerImg = (m_moveDirX < 0.0f) ? &m_charYingLeft : &m_charYingRight;
+
+    float imgSize = radius * 4.5f;
+    float glowR = imgSize * 0.7f;
+    QRadialGradient playerGlow(screen, glowR);
+    playerGlow.setColorAt(0.0, QColor(255, 255, 255, 80));
+    playerGlow.setColorAt(0.5, QColor(255, 255, 200, 30));
+    playerGlow.setColorAt(1.0, QColor(255, 255, 200, 0));
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(playerGlow);
+    painter.drawEllipse(screen, glowR, glowR);
+
+    if (playerImg && !playerImg->isNull())
+    {
+        QImage scaled = playerImg->toImage().scaled(
+            static_cast<int>(imgSize), static_cast<int>(imgSize),
+            Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        painter.drawImage(QPointF(screen.x() - scaled.width() / 2.0,
+                                  screen.y() - scaled.height() / 2.0), scaled);
+    }
+    else
+    {
+        painter.setPen(QPen(QColor(150, 200, 255), 2.0f));
+        painter.setBrush(QColor(60, 120, 200));
+        painter.drawEllipse(screen, radius, radius);
+    }
 
     float lightDirAngle = std::atan2(m_mousePos.y() - height() / 2.0f, m_mousePos.x() - width() / 2.0f);
     float indicatorLen = radius + 8.0f;
@@ -960,10 +1093,13 @@ void GameWidget::renderLightOverlay(QPainter &painter)
         op.setPen(Qt::NoPen);
 
         bool is360 = m_player.ultActive && m_player.ultChargesUsed >= 3;
+        float effectiveLightRadius = LIGHT_RADIUS;
+        if (is360)
+            effectiveLightRadius += m_ultUpgradeLevel * 0.5f * UNIT_PX;
 
         if (is360)
         {
-            op.drawEllipse(playerScreen, LIGHT_RADIUS, LIGHT_RADIUS);
+            op.drawEllipse(playerScreen, effectiveLightRadius, effectiveLightRadius);
         }
         else
         {
@@ -982,6 +1118,10 @@ void GameWidget::renderLightOverlay(QPainter &painter)
             conePath.closeSubpath();
             op.drawPath(conePath);
         }
+
+        float playerGlowRadius = 15.0f * 2.25f;
+        op.drawEllipse(playerScreen, playerGlowRadius, playerGlowRadius);
+
         op.end();
     }
 
@@ -991,17 +1131,20 @@ void GameWidget::renderLightOverlay(QPainter &painter)
         gp.setRenderHint(QPainter::Antialiasing);
 
         bool is360 = m_player.ultActive && m_player.ultChargesUsed >= 3;
+        float effectiveLightRadius = LIGHT_RADIUS;
+        if (is360)
+            effectiveLightRadius += m_ultUpgradeLevel * 0.5f * UNIT_PX;
 
         if (is360)
         {
-            QRadialGradient gradient(playerScreen, LIGHT_RADIUS);
+            QRadialGradient gradient(playerScreen, effectiveLightRadius);
             gradient.setColorAt(0.0, QColor(255, 200, 100, 0));
             gradient.setColorAt(0.85, QColor(255, 180, 80, 0));
             gradient.setColorAt(0.95, QColor(255, 150, 50, 60));
             gradient.setColorAt(1.0, QColor(255, 100, 30, 0));
             gp.setBrush(gradient);
             gp.setPen(Qt::NoPen);
-            gp.drawEllipse(playerScreen, LIGHT_RADIUS, LIGHT_RADIUS);
+            gp.drawEllipse(playerScreen, effectiveLightRadius, effectiveLightRadius);
         }
         else
         {
@@ -1040,85 +1183,95 @@ void GameWidget::renderLightOverlay(QPainter &painter)
 void GameWidget::renderHUD(QPainter &painter)
 {
     int w = width();
-    int margin = 15;
-    int y = 10;
-    int barH = 16;
-    int barW = 180;
+    int h = height();
+    int margin = 10;
+    int y = 6;
+    int barH = 14;
+    int barW = 160;
+    int lineH = 18;
 
-    QFont hudFont(QStringLiteral("Arial"), 11);
+    QFont hudFont(QStringLiteral("Arial"), 10);
     painter.setFont(hudFont);
 
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(60, 20, 20));
-    painter.drawRoundedRect(QRectF(margin, y, barW, barH), 4.0, 4.0);
+    painter.drawRoundedRect(QRectF(margin, y, barW, barH), 3.0, 3.0);
     float hpRatio = static_cast<float>(m_player.hp) / MAX_HP;
     painter.setBrush(QColor(200, 50, 50));
-    painter.drawRoundedRect(QRectF(margin, y, barW * hpRatio, barH), 4.0, 4.0);
+    painter.drawRoundedRect(QRectF(margin, y, barW * hpRatio, barH), 3.0, 3.0);
     painter.setPen(Qt::white);
     painter.drawText(QRectF(margin, y, barW, barH), Qt::AlignCenter,
-                     QStringLiteral("HP: %1/%2").arg(m_player.hp).arg(MAX_HP));
+                     QStringLiteral("HP:%1/%2").arg(m_player.hp).arg(MAX_HP));
 
-    y += barH + 5;
+    int expX = margin + barW + 8;
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(20, 20, 60));
-    painter.drawRoundedRect(QRectF(margin, y, barW, barH), 4.0, 4.0);
+    painter.drawRoundedRect(QRectF(expX, y, barW, barH), 3.0, 3.0);
     float expRatio = static_cast<float>(m_player.experience) / EXP_PER_LEVEL;
     painter.setBrush(QColor(100, 100, 200));
-    painter.drawRoundedRect(QRectF(margin, y, barW * expRatio, barH), 4.0, 4.0);
+    painter.drawRoundedRect(QRectF(expX, y, barW * expRatio, barH), 3.0, 3.0);
     painter.setPen(Qt::white);
-    painter.drawText(QRectF(margin, y, barW, barH), Qt::AlignCenter,
-                     QStringLiteral("Lv.%1  EXP: %2/%3").arg(m_player.level).arg(m_player.experience).arg(EXP_PER_LEVEL));
-
-    int rightX = w - 250;
-    y = 10;
-    int lineH = 20;
-    painter.setPen(QColor(200, 200, 200));
+    painter.drawText(QRectF(expX, y, barW, barH), Qt::AlignCenter,
+                     QStringLiteral("Lv.%1 EXP:%2/%3").arg(m_player.level).arg(m_player.experience).arg(EXP_PER_LEVEL));
 
     int mins = static_cast<int>(m_survivalTime) / 60;
     int secs = static_cast<int>(m_survivalTime) % 60;
-    painter.drawText(QRectF(rightX, y, 240, lineH), Qt::AlignRight,
-                     QStringLiteral("时间: %1:%2  击杀: %3")
+
+    int infoX = expX + barW + 15;
+    painter.setPen(QColor(220, 220, 220));
+    painter.drawText(QRectF(infoX, y, 280, lineH), Qt::AlignLeft,
+                     QStringLiteral("时间:%1:%2  击杀:%3  灯照:%4°  速度:%5  伤害:%6")
                          .arg(mins, 2, 10, QChar('0'))
                          .arg(secs, 2, 10, QChar('0'))
-                         .arg(m_player.killCount));
-    y += lineH;
-    painter.drawText(QRectF(rightX, y, 240, lineH), Qt::AlignRight,
-                     QStringLiteral("光照: %1°  速度: %2  伤害: %3")
+                         .arg(m_player.killCount)
                          .arg(m_player.lightAngle)
                          .arg(m_player.speed, 0, 'f', 1)
                          .arg(m_player.attackDamage, 0, 'f', 1));
-    y += lineH;
+
+    y += lineH + 2;
 
     QString atkCD = (m_player.attackCooldownTimer > 0.0f)
-                        ? QStringLiteral("攻击CD: %1s").arg(m_player.attackCooldownTimer, 0, 'f', 1)
-                        : QStringLiteral("攻击: 就绪");
-    painter.drawText(QRectF(rightX, y, 240, lineH), Qt::AlignRight, atkCD);
-    y += lineH;
+                        ? QStringLiteral("攻击CD:%1s").arg(m_player.attackCooldownTimer, 0, 'f', 1)
+                        : QStringLiteral("攻击:就绪");
 
     QString spdCD;
     if (m_player.speedBoostActive)
-        spdCD = QStringLiteral("加速中: %1s").arg(m_player.speedBoostTimer, 0, 'f', 1);
+        spdCD = QStringLiteral("加速中:%1s").arg(m_player.speedBoostTimer, 0, 'f', 1);
     else if (m_player.speedBoostCooldownTimer > 0.0f)
-        spdCD = QStringLiteral("加速CD: %1s").arg(m_player.speedBoostCooldownTimer, 0, 'f', 1);
+        spdCD = QStringLiteral("加速CD:%1s").arg(m_player.speedBoostCooldownTimer, 0, 'f', 1);
     else
-        spdCD = QStringLiteral("加速: 就绪");
-    painter.drawText(QRectF(rightX, y, 240, lineH), Qt::AlignRight, spdCD);
-    y += lineH;
+        spdCD = QStringLiteral("加速:就绪");
 
     QString ultStr;
     if (m_player.ultActive)
-        ultStr = QStringLiteral("大招中: %1s").arg(m_player.ultTimer, 0, 'f', 1);
+        ultStr = QStringLiteral("大招中:%1s").arg(m_player.ultTimer, 0, 'f', 1);
     else if (m_player.ultCooldownTimer > 0.0f)
-        ultStr = QStringLiteral("大招CD: %1s").arg(m_player.ultCooldownTimer, 0, 'f', 1);
+        ultStr = QStringLiteral("大招CD:%1s").arg(m_player.ultCooldownTimer, 0, 'f', 1);
     else
-        ultStr = QStringLiteral("大招: 就绪");
+        ultStr = QStringLiteral("大招:就绪");
 
     QString charges;
     for (int i = 0; i < 3; ++i)
         charges += (i < m_player.ultCharges) ? QStringLiteral("◆") : QStringLiteral("◇");
 
-    painter.drawText(QRectF(rightX, y, 240, lineH), Qt::AlignRight,
-                     QStringLiteral("%1  充能: %2").arg(ultStr, charges));
+    painter.setPen(QColor(200, 200, 200));
+    painter.drawText(QRectF(margin, y, w - margin * 2, lineH), Qt::AlignLeft,
+                     QStringLiteral("%1  |  %2  |  %3  充能:%4").arg(atkCD, spdCD, ultStr, charges));
+
+    float endBtnW = 70.0f, endBtnH = 24.0f;
+    float endBtnX = w - endBtnW - 8.0f;
+    float endBtnY = h - endBtnH - 8.0f;
+    m_endButtonRect = QRectF(endBtnX, endBtnY, endBtnW, endBtnH);
+
+    painter.setPen(QPen(QColor(180, 60, 60), 1.5f));
+    painter.setBrush(QColor(40, 20, 20, 180));
+    painter.drawRoundedRect(m_endButtonRect, 5.0, 5.0);
+
+    QFont endFont = painter.font();
+    endFont.setPointSize(9);
+    painter.setFont(endFont);
+    painter.setPen(QColor(255, 150, 150));
+    painter.drawText(m_endButtonRect, Qt::AlignCenter, QStringLiteral("结束"));
 }
 
 void GameWidget::renderUltImage(QPainter &painter)
@@ -1153,7 +1306,17 @@ void GameWidget::renderUltImage(QPainter &painter)
 
 void GameWidget::renderStartScreen(QPainter &painter)
 {
-    painter.fillRect(rect(), QColor(15, 15, 25));
+    if (!m_startBg.isNull())
+    {
+        QImage scaledBg = m_startBg.toImage().scaled(
+            width(), height(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        painter.drawImage(0, 0, scaledBg);
+        painter.fillRect(rect(), QColor(0, 0, 0, 120));
+    }
+    else
+    {
+        painter.fillRect(rect(), QColor(15, 15, 25));
+    }
 
     int w = width();
     int h = height();
@@ -1164,32 +1327,32 @@ void GameWidget::renderStartScreen(QPainter &painter)
     painter.setFont(titleFont);
     painter.setPen(QColor(255, 200, 100));
     painter.drawText(QRect(0, h / 8, w, 60), Qt::AlignCenter,
-                     QStringLiteral("光影行者 Light Walker"));
+                     QStringLiteral("猎杀多托雷"));
 
     QFont instrFont = painter.font();
-    instrFont.setPointSize(13);
+    instrFont.setPointSize(11);
     painter.setFont(instrFont);
-    painter.setPen(QColor(200, 200, 200));
+    painter.setPen(QColor(220, 200, 160));
 
-    int y = h / 4 + 20;
-    int lineH = 28;
-    QStringList instructions = {
-        QStringLiteral("操作说明："),
-        QStringLiteral("WASD / 方向键  —  移动"),
-        QStringLiteral("鼠标移动  —  控制光照方向"),
-        QStringLiteral("鼠标左键  —  攻击技能（对光照范围内所有怪物造成伤害）"),
-        QStringLiteral("鼠标右键  —  加速技能（2秒内速度翻倍）"),
-        QStringLiteral("F 键  —  大招（需拾取能量球充能，最多3格）"),
-        QString(),
-        QStringLiteral("拾取能量球为大招充能，拾取血包恢复生命值"),
-        QStringLiteral("在黑暗中生存尽可能久！"),
-    };
+    QString loreText = QStringLiteral(
+        "旅行者请手持充满月矩力的提灯斩杀博士的切片吧，博士行事阴暗，喜爱背地里下死手，"
+        "故在灯的照射下，其行动受限；拾取一个月矩力释放大招会暂时得到来自执灯士菲林斯的保护，"
+        "拾取两个月矩力释放大招会得到来自叮铃哐啷蛋卷工坊老大爱诺的月矩力大炮支援，"
+        "拾取三个月矩力释放大招会得到三月女神哥伦比娅的祝福。请旅行者尽情战斗吧。");
 
-    for (const auto &line : instructions)
-    {
-        painter.drawText(QRect(w / 6, y, w * 2 / 3, lineH), Qt::AlignCenter, line);
-        y += lineH;
-    }
+    QRectF loreRect(w * 0.08f, h * 0.26f, w * 0.84f, h * 0.28f);
+    painter.drawText(loreRect, Qt::AlignCenter | Qt::TextWordWrap, loreText);
+
+    QFont ctrlFont = painter.font();
+    ctrlFont.setPointSize(9);
+    painter.setFont(ctrlFont);
+    painter.setPen(QColor(180, 180, 200));
+
+    QString ctrlText = QStringLiteral(
+        "WASD/方向键移动 | 鼠标控制灯照方向 | 左键攻击 | 右键加速 | F键大招 | 拾取月矩力球充能，血包回血");
+
+    QRectF ctrlRect(w * 0.05f, h * 0.56f, w * 0.9f, 20);
+    painter.drawText(ctrlRect, Qt::AlignCenter, ctrlText);
 
     float btnW = 220.0f, btnH = 50.0f;
     float btnX = (w - btnW) / 2.0f;
@@ -1208,6 +1371,61 @@ void GameWidget::renderStartScreen(QPainter &painter)
     painter.drawText(m_startButtonRect, Qt::AlignCenter, QStringLiteral("点击开始游戏"));
 }
 
+void GameWidget::renderCharSelect(QPainter &painter)
+{
+    painter.fillRect(rect(), QColor(15, 15, 25));
+
+    int w = width();
+    int h = height();
+
+    QFont titleFont = painter.font();
+    titleFont.setPointSize(28);
+    titleFont.setBold(true);
+    painter.setFont(titleFont);
+    painter.setPen(QColor(255, 200, 100));
+    painter.drawText(QRect(0, h / 10, w, 50), Qt::AlignCenter,
+                     QStringLiteral("选择角色"));
+
+    int btnW = 180;
+    int btnH = 80;
+    int spacing = 50;
+    float totalW = btnW * 2 + spacing;
+    float startX = (w - totalW) / 2.0f;
+    float btnY = h / 2.0f - btnH / 2.0f;
+
+    m_charSelectRect1 = QRectF(startX, btnY, btnW, btnH);
+    m_charSelectRect2 = QRectF(startX + btnW + spacing, btnY, btnW, btnH);
+
+    bool hover1 = m_charSelectRect1.contains(m_mousePos);
+    bool hover2 = m_charSelectRect2.contains(m_mousePos);
+
+    auto drawBtn = [&](const QRectF &rect, const QString &name, bool hovered)
+    {
+        QColor bgColor = hovered ? QColor(60, 60, 100) : QColor(30, 30, 50);
+        QColor borderColor = hovered ? QColor(255, 200, 100) : QColor(80, 80, 120);
+        painter.setPen(QPen(borderColor, 2.0f));
+        painter.setBrush(bgColor);
+        painter.drawRoundedRect(rect, 12.0, 12.0);
+
+        QFont nameFont = painter.font();
+        nameFont.setPointSize(22);
+        nameFont.setBold(true);
+        painter.setFont(nameFont);
+        painter.setPen(hovered ? QColor(255, 220, 100) : QColor(200, 200, 200));
+        painter.drawText(rect, Qt::AlignCenter, name);
+    };
+
+    drawBtn(m_charSelectRect1, QStringLiteral("空"), hover1);
+    drawBtn(m_charSelectRect2, QStringLiteral("荧"), hover2);
+
+    QFont backFont = painter.font();
+    backFont.setPointSize(12);
+    painter.setFont(backFont);
+    painter.setPen(QColor(150, 150, 150));
+    painter.drawText(QRect(0, h - 50, w, 30), Qt::AlignCenter,
+                     QStringLiteral("点击角色名称开始游戏"));
+}
+
 void GameWidget::renderEndScreen(QPainter &painter)
 {
     painter.fillRect(rect(), QColor(15, 15, 25));
@@ -1220,7 +1438,36 @@ void GameWidget::renderEndScreen(QPainter &painter)
     titleFont.setBold(true);
     painter.setFont(titleFont);
     painter.setPen(QColor(255, 100, 100));
-    painter.drawText(QRect(0, h / 6, w, 60), Qt::AlignCenter, QStringLiteral("游戏结束"));
+    painter.drawText(QRect(0, h / 8, w, 60), Qt::AlignCenter, QStringLiteral("游戏结束"));
+
+    int totalSecs = static_cast<int>(m_survivalTime);
+    int mins = totalSecs / 60;
+    int secs = totalSecs % 60;
+
+    QString rating;
+    QColor ratingColor;
+    if (totalSecs <= 180)
+    {
+        rating = QStringLiteral("提米鸽子");
+        ratingColor = QColor(150, 150, 150);
+    }
+    else if (totalSecs <= 360)
+    {
+        rating = QStringLiteral("博士克星");
+        ratingColor = QColor(100, 200, 255);
+    }
+    else
+    {
+        rating = QStringLiteral("真降临者");
+        ratingColor = QColor(255, 200, 50);
+    }
+
+    QFont ratingFont = painter.font();
+    ratingFont.setPointSize(28);
+    ratingFont.setBold(true);
+    painter.setFont(ratingFont);
+    painter.setPen(ratingColor);
+    painter.drawText(QRect(0, h / 8 + 60, w, 50), Qt::AlignCenter, rating);
 
     QFont statFont = painter.font();
     statFont.setPointSize(16);
@@ -1231,7 +1478,7 @@ void GameWidget::renderEndScreen(QPainter &painter)
     int lineH = 40;
 
     painter.drawText(QRect(0, y, w, lineH), Qt::AlignCenter,
-                     QStringLiteral("存活时间：%1 秒").arg(static_cast<int>(m_survivalTime)));
+                     QStringLiteral("存活时间：%1分%2秒").arg(mins).arg(secs, 2, 10, QChar('0')));
     y += lineH;
     painter.drawText(QRect(0, y, w, lineH), Qt::AlignCenter,
                      QStringLiteral("等级：%1").arg(m_player.level));

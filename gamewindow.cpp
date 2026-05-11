@@ -4,7 +4,7 @@
 GameWindow::GameWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    setWindowTitle(QStringLiteral("光影行者 Light Walker"));
+    setWindowTitle(QStringLiteral("猎杀多托雷"));
     setMinimumSize(800, 600);
     resize(1024, 768);
 
