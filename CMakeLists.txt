@@ -14,6 +14,22 @@ qt_add_executable(111
     gamewidget.h
 )
 
+qt_add_resources(111 "resources"
+    PREFIX "/images"
+    FILES
+        tp/1.jpg
+        tp/2.jpg
+        tp/3.jpg
+        tp/4.jpg
+        tp/5.jpg
+        tp/6.jpg
+        tp/7.jpg
+        tp/8.jpg
+        tp/9.jpg
+        tp/10.jpg
+        tp/11.jpg
+)
+
 target_link_libraries(111
     PRIVATE
         Qt::Core

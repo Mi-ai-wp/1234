@@ -1,6 +1,4 @@
 #include "gamewidget.h"
-#include <QCoreApplication>
-#include <QDir>
 
 GameWidget::GameWidget(QWidget *parent)
     : QWidget(parent)
@@ -11,23 +9,20 @@ GameWidget::GameWidget(QWidget *parent)
     setMinimumSize(800, 600);
     setContextMenuPolicy(Qt::NoContextMenu);
 
-    QString tpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/../tp");
-    if (!QDir(tpDir).exists())
-        tpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/../../tp");
-    m_ultImage1.load(tpDir + QStringLiteral("/1.jpg"), "JPG");
-    m_ultImage2.load(tpDir + QStringLiteral("/2.jpg"), "JPG");
-    m_ultImage3.load(tpDir + QStringLiteral("/3.jpg"), "JPG");
+    m_ultImage1.load(QStringLiteral(":/images/tp/1.jpg"));
+    m_ultImage2.load(QStringLiteral(":/images/tp/2.jpg"));
+    m_ultImage3.load(QStringLiteral(":/images/tp/3.jpg"));
 
-    m_monsterImage1.load(tpDir + QStringLiteral("/8.jpg"), "JPG");
-    m_monsterImage2.load(tpDir + QStringLiteral("/9.jpg"), "JPG");
-    m_monsterImage3.load(tpDir + QStringLiteral("/10.jpg"), "JPG");
+    m_monsterImage1.load(QStringLiteral(":/images/tp/8.jpg"));
+    m_monsterImage2.load(QStringLiteral(":/images/tp/9.jpg"));
+    m_monsterImage3.load(QStringLiteral(":/images/tp/10.jpg"));
 
-    m_charKongLeft.load(tpDir + QStringLiteral("/6.jpg"), "JPG");
-    m_charKongRight.load(tpDir + QStringLiteral("/7.jpg"), "JPG");
-    m_charYingLeft.load(tpDir + QStringLiteral("/4.jpg"), "JPG");
-    m_charYingRight.load(tpDir + QStringLiteral("/5.jpg"), "JPG");
+    m_charKongLeft.load(QStringLiteral(":/images/tp/6.jpg"));
+    m_charKongRight.load(QStringLiteral(":/images/tp/7.jpg"));
+    m_charYingLeft.load(QStringLiteral(":/images/tp/4.jpg"));
+    m_charYingRight.load(QStringLiteral(":/images/tp/5.jpg"));
 
-    m_startBg.load(tpDir + QStringLiteral("/11.jpg"), "JPG");
+    m_startBg.load(QStringLiteral(":/images/tp/11.jpg"));
 
     m_loopTimer = new QTimer(this);
     connect(m_loopTimer, &QTimer::timeout, this, &GameWidget::gameLoop);
