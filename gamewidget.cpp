@@ -116,7 +116,7 @@ void GameWidget::updateGame(float dt)
 
     m_monsterSpawnTimer += dt;
     float cappedTime = std::min(m_survivalTime, 360.0f);
-    float spawnInterval = std::max(0.5f, 2.0f - cappedTime / 120.0f);
+    float spawnInterval = std::max(0.8f, 3.0f - cappedTime / 180.0f);
     if (m_monsterSpawnTimer >= spawnInterval)
     {
         m_monsterSpawnTimer -= spawnInterval;
@@ -434,19 +434,19 @@ void GameWidget::spawnMonsters()
         case 1:
             m.hp = 2.0f; m.maxHp = 2.0f;
             m.speed = 2.0f;
-            m.damage = 2.0f;
+            m.damage = 1.5f;
             m.expReward = 2;
             break;
         case 2:
             m.hp = 3.0f; m.maxHp = 3.0f;
             m.speed = 1.5f;
-            m.damage = 3.5f;
+            m.damage = 2.5f;
             m.expReward = 6;
             break;
         case 3:
             m.hp = 9.0f; m.maxHp = 9.0f;
             m.speed = 0.0f;
-            m.damage = 5.0f;
+            m.damage = 4.0f;
             m.expReward = 10;
             m.attackTimer = 0.0f;
             m.attackInterval = 2.0f;
@@ -488,7 +488,10 @@ void GameWidget::checkLevelUp()
         m_player.experience -= EXP_PER_LEVEL;
         m_player.level++;
         generateUpgradeOptions();
-        m_state = GameState::Upgrade;
+        if (!m_upgradeOptions.empty())
+        {
+            m_state = GameState::Upgrade;
+        }
         break;
     }
 }
@@ -809,7 +812,7 @@ void GameWidget::renderGame(QPainter &painter)
         if (m.inLight)
         {
             QPointF screen = worldToScreen(m.x, m.y);
-            float radius = (m.tier == 3) ? 26.0f : (m.tier == 2) ? 20.0f : 14.0f;
+            float radius = (m.tier == 3) ? 32.0f : (m.tier == 2) ? 25.0f : 18.0f;
             QPen highlightPen(QColor(255, 255, 100, 180), 3.0f);
             painter.setPen(highlightPen);
             painter.setBrush(Qt::NoBrush);
@@ -913,19 +916,19 @@ void GameWidget::renderMonsters(QPainter &painter)
         switch (m.tier)
         {
         case 1:
-            radius = 30.0f;
+            radius = 38.0f;
             img = &m_monsterImage1;
             break;
         case 2:
-            radius = 45.0f;
+            radius = 55.0f;
             img = &m_monsterImage2;
             break;
         case 3:
-            radius = 60.0f;
+            radius = 72.0f;
             img = &m_monsterImage3;
             break;
         default:
-            radius = 30.0f;
+            radius = 38.0f;
             img = &m_monsterImage1;
         }
 
@@ -1017,7 +1020,7 @@ void GameWidget::renderPlayer(QPainter &painter)
     {
         painter.setPen(QPen(QColor(255, 255, 100, 180), 3.0f));
         painter.setBrush(Qt::NoBrush);
-        painter.drawEllipse(screen, radius + 30.0f, radius + 30.0f);
+        painter.drawEllipse(screen, radius + 42.0f, radius + 42.0f);
     }
 
     if (m_player.ultActive && m_player.ultChargesUsed >= 3)
@@ -1033,7 +1036,7 @@ void GameWidget::renderPlayer(QPainter &painter)
     else if (m_selectedCharacter == 2)
         playerImg = (m_moveDirX < 0.0f) ? &m_charYingLeft : &m_charYingRight;
 
-    float imgSize = radius * 4.5f;
+    float imgSize = radius * 5.5f;
     float glowR = imgSize * 0.7f;
     QRadialGradient playerGlow(screen, glowR);
     playerGlow.setColorAt(0.0, QColor(255, 255, 255, 80));
