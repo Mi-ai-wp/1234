@@ -33,7 +33,7 @@ constexpr float INITIAL_DAMAGE = 1.0f;
 constexpr float MAX_DAMAGE = 3.0f;
 constexpr float DAMAGE_INCREMENT = 1.0f;
 
-constexpr float ATTACK_COOLDOWN = 2.5f;
+constexpr float ATTACK_COOLDOWN = 1.5f;
 constexpr float SPEED_BOOST_DURATION = 2.0f;
 constexpr float SPEED_BOOST_COOLDOWN = 3.0f;
 constexpr float ULT_DURATION = 2.5f;
@@ -47,8 +47,8 @@ constexpr int EXP_PER_LEVEL = 20;
 constexpr float MONSTER_SPAWN_RADIUS = 5.0f * UNIT_PX;
 constexpr float MONSTER_DESPAWN_RADIUS = 7.0f * UNIT_PX;
 
-constexpr float ITEM_SPAWN_INTERVAL = 4.0f;
-constexpr int ITEMS_PER_SPAWN = 2;
+constexpr float ITEM_SPAWN_INTERVAL = 2.5f;
+constexpr int ITEMS_PER_SPAWN = 3;
 
 constexpr float PI = 3.14159265358979323846f;
 

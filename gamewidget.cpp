@@ -261,7 +261,7 @@ void GameWidget::updatePlayer(float dt)
             bool picked = false;
             if (it->type == 0)
             {
-                if (m_player.ultCooldownTimer <= 0.0f && m_player.ultCharges < 3 && !m_player.ultActive)
+                if (m_player.ultCharges < 3 && !m_player.ultActive)
                 {
                     m_player.ultCharges++;
                     picked = true;
@@ -455,7 +455,7 @@ void GameWidget::spawnMonsters()
 void GameWidget::spawnItems()
 {
     std::uniform_real_distribution<float> angleDist(0.0f, 2.0f * PI);
-    std::uniform_real_distribution<float> radiusDist(1.5f * UNIT_PX, 3.5f * UNIT_PX);
+    std::uniform_real_distribution<float> radiusDist(0.5f * UNIT_PX, 2.0f * UNIT_PX);
     std::uniform_int_distribution<int> typeDist(0, 1);
 
     for (int i = 0; i < ITEMS_PER_SPAWN; ++i)
