@@ -47,8 +47,8 @@ constexpr int EXP_PER_LEVEL = 20;
 constexpr float MONSTER_SPAWN_RADIUS = 5.0f * UNIT_PX;
 constexpr float MONSTER_DESPAWN_RADIUS = 7.0f * UNIT_PX;
 
-constexpr float ITEM_SPAWN_INTERVAL = 2.5f;
-constexpr int ITEMS_PER_SPAWN = 3;
+constexpr float ITEM_SPAWN_INTERVAL = 0.85f;
+constexpr int ITEMS_PER_SPAWN = 1;
 
 constexpr float PI = 3.14159265358979323846f;
 

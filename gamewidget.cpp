@@ -454,22 +454,39 @@ void GameWidget::spawnMonsters()
 
 void GameWidget::spawnItems()
 {
-    std::uniform_real_distribution<float> angleDist(0.0f, 2.0f * PI);
-    std::uniform_real_distribution<float> radiusDist(0.5f * UNIT_PX, 2.0f * UNIT_PX);
     std::uniform_int_distribution<int> typeDist(0, 1);
 
-    for (int i = 0; i < ITEMS_PER_SPAWN; ++i)
-    {
-        float angle = angleDist(m_rng);
-        float radius = radiusDist(m_rng);
+    float minDist = 44.0f;
+    float halfW = width() / 2.0f - 30.0f;
+    float halfH = height() / 2.0f - 30.0f;
+    std::uniform_real_distribution<float> xDist(-halfW, halfW);
+    std::uniform_real_distribution<float> yDist(-halfH, halfH);
 
+    for (int attempt = 0; attempt < 20; ++attempt)
+    {
         Item item;
-        item.x = m_player.x + std::cos(angle) * radius;
-        item.y = m_player.y + std::sin(angle) * radius;
+        item.x = m_player.x + xDist(m_rng);
+        item.y = m_player.y + yDist(m_rng);
         item.type = typeDist(m_rng);
         item.radius = 22.0f;
 
-        m_items.push_back(item);
+        bool overlap = false;
+        for (const auto &existing : m_items)
+        {
+            float dx = item.x - existing.x;
+            float dy = item.y - existing.y;
+            if (std::sqrt(dx * dx + dy * dy) < minDist)
+            {
+                overlap = true;
+                break;
+            }
+        }
+
+        if (!overlap)
+        {
+            m_items.push_back(item);
+            break;
+        }
     }
 
     if (static_cast<int>(m_items.size()) > 20)
@@ -792,7 +809,7 @@ TileType GameWidget::getTileType(int tx, int ty)
 
 void GameWidget::renderGame(QPainter &painter)
 {
-    painter.fillRect(rect(), QColor(10, 10, 15));
+    painter.fillRect(rect(), QColor(0, 0, 0));
 
     renderMap(painter);
     renderItems(painter);
@@ -838,10 +855,10 @@ void GameWidget::renderMap(QPainter &painter)
             QColor color;
             switch (type)
             {
-            case TileType::Ground:  color = QColor(40, 40, 45); break;
-            case TileType::Dark:    color = QColor(25, 25, 30); break;
-            case TileType::Cracked: color = QColor(55, 40, 25); break;
-            case TileType::Rune:    color = QColor(35, 30, 55); break;
+            case TileType::Ground:  color = QColor(5, 5, 5); break;
+            case TileType::Dark:    color = QColor(0, 0, 0); break;
+            case TileType::Cracked: color = QColor(8, 8, 8); break;
+            case TileType::Rune:    color = QColor(3, 3, 3); break;
             }
 
             float wx = tx * TILE_SIZE;
@@ -1182,32 +1199,33 @@ void GameWidget::renderHUD(QPainter &painter)
 {
     int w = width();
     int h = height();
-    int margin = 10;
-    int y = 6;
-    int barH = 14;
-    int barW = 160;
-    int lineH = 18;
+    int margin = 12;
+    int y = 8;
+    int barH = 20;
+    int barW = 200;
+    int lineH = 24;
 
-    QFont hudFont(QStringLiteral("Arial"), 10);
+    QFont hudFont(QStringLiteral("Arial"), 12);
+    hudFont.setBold(true);
     painter.setFont(hudFont);
 
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(60, 20, 20));
-    painter.drawRoundedRect(QRectF(margin, y, barW, barH), 3.0, 3.0);
+    painter.drawRoundedRect(QRectF(margin, y, barW, barH), 4.0, 4.0);
     float hpRatio = static_cast<float>(m_player.hp) / MAX_HP;
     painter.setBrush(QColor(200, 50, 50));
-    painter.drawRoundedRect(QRectF(margin, y, barW * hpRatio, barH), 3.0, 3.0);
+    painter.drawRoundedRect(QRectF(margin, y, barW * hpRatio, barH), 4.0, 4.0);
     painter.setPen(Qt::white);
     painter.drawText(QRectF(margin, y, barW, barH), Qt::AlignCenter,
                      QStringLiteral("HP:%1/%2").arg(m_player.hp).arg(MAX_HP));
 
-    int expX = margin + barW + 8;
+    int expX = margin + barW + 10;
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(20, 20, 60));
-    painter.drawRoundedRect(QRectF(expX, y, barW, barH), 3.0, 3.0);
+    painter.drawRoundedRect(QRectF(expX, y, barW, barH), 4.0, 4.0);
     float expRatio = static_cast<float>(m_player.experience) / EXP_PER_LEVEL;
     painter.setBrush(QColor(100, 100, 200));
-    painter.drawRoundedRect(QRectF(expX, y, barW * expRatio, barH), 3.0, 3.0);
+    painter.drawRoundedRect(QRectF(expX, y, barW * expRatio, barH), 4.0, 4.0);
     painter.setPen(Qt::white);
     painter.drawText(QRectF(expX, y, barW, barH), Qt::AlignCenter,
                      QStringLiteral("Lv.%1 EXP:%2/%3").arg(m_player.level).arg(m_player.experience).arg(EXP_PER_LEVEL));
@@ -1215,9 +1233,9 @@ void GameWidget::renderHUD(QPainter &painter)
     int mins = static_cast<int>(m_survivalTime) / 60;
     int secs = static_cast<int>(m_survivalTime) % 60;
 
-    int infoX = expX + barW + 15;
+    int infoX = expX + barW + 20;
     painter.setPen(QColor(220, 220, 220));
-    painter.drawText(QRectF(infoX, y, 280, lineH), Qt::AlignLeft,
+    painter.drawText(QRectF(infoX, y, 350, lineH), Qt::AlignLeft,
                      QStringLiteral("时间:%1:%2  击杀:%3  灯照:%4°  速度:%5  伤害:%6")
                          .arg(mins, 2, 10, QChar('0'))
                          .arg(secs, 2, 10, QChar('0'))
@@ -1226,7 +1244,7 @@ void GameWidget::renderHUD(QPainter &painter)
                          .arg(m_player.speed, 0, 'f', 1)
                          .arg(m_player.attackDamage, 0, 'f', 1));
 
-    y += lineH + 2;
+    y += lineH + 4;
 
     QString atkCD = (m_player.attackCooldownTimer > 0.0f)
                         ? QStringLiteral("攻击CD:%1s").arg(m_player.attackCooldownTimer, 0, 'f', 1)
@@ -1256,17 +1274,18 @@ void GameWidget::renderHUD(QPainter &painter)
     painter.drawText(QRectF(margin, y, w - margin * 2, lineH), Qt::AlignLeft,
                      QStringLiteral("%1  |  %2  |  %3  充能:%4").arg(atkCD, spdCD, ultStr, charges));
 
-    float endBtnW = 70.0f, endBtnH = 24.0f;
-    float endBtnX = w - endBtnW - 8.0f;
-    float endBtnY = h - endBtnH - 8.0f;
+    float endBtnW = 90.0f, endBtnH = 32.0f;
+    float endBtnX = w - endBtnW - 12.0f;
+    float endBtnY = 8.0f;
     m_endButtonRect = QRectF(endBtnX, endBtnY, endBtnW, endBtnH);
 
-    painter.setPen(QPen(QColor(180, 60, 60), 1.5f));
-    painter.setBrush(QColor(40, 20, 20, 180));
-    painter.drawRoundedRect(m_endButtonRect, 5.0, 5.0);
+    painter.setPen(QPen(QColor(180, 60, 60), 2.0f));
+    painter.setBrush(QColor(40, 20, 20, 200));
+    painter.drawRoundedRect(m_endButtonRect, 6.0, 6.0);
 
     QFont endFont = painter.font();
-    endFont.setPointSize(9);
+    endFont.setPointSize(11);
+    endFont.setBold(true);
     painter.setFont(endFont);
     painter.setPen(QColor(255, 150, 150));
     painter.drawText(m_endButtonRect, Qt::AlignCenter, QStringLiteral("结束"));
