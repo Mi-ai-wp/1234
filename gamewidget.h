@@ -190,8 +190,10 @@ private:
     QRectF m_startButtonRect;
     QRectF m_returnButtonRect;
     QRectF m_endButtonRect;
+    QRectF m_pauseButtonRect;
     QRectF m_charSelectRect1;
     QRectF m_charSelectRect2;
+    bool m_paused = false;
 
     void resetGame();
     void updateGame(float dt);
@@ -221,5 +223,6 @@ private:
     QPointF worldToScreen(float wx, float wy) const;
     bool isInLightCone(float wx, float wy) const;
     float distanceToPlayer(float wx, float wy) const;
+    float effectiveLightRadius() const;
     static TileType getTileType(int tx, int ty);
 };

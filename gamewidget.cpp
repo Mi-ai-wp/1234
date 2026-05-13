@@ -53,6 +53,7 @@ void GameWidget::resetGame()
     m_spikeUpgradeLevel = 0;
     m_gameElapsedTime = 0.0f;
     m_nextSpikeUpgradeTime = 120.0f;
+    m_paused = false;
 }
 
 void GameWidget::gameLoop()
@@ -64,7 +65,7 @@ void GameWidget::gameLoop()
     if (dt > 0.1f)
         dt = 0.1f;
 
-    if (m_state == GameState::Playing)
+    if (m_state == GameState::Playing && !m_paused)
     {
         m_survivalTime += dt;
         updateGame(dt);
@@ -310,7 +311,8 @@ void GameWidget::updateMonsters(float dt)
         float dist = std::sqrt(dx * dx + dy * dy);
 
         bool inLight = false;
-        if (dist <= LIGHT_RADIUS)
+        float effRadius = effectiveLightRadius();
+        if (dist <= effRadius)
         {
             if (is360Light)
             {
@@ -700,6 +702,13 @@ void GameWidget::mousePressEvent(QMouseEvent *event)
         return;
     }
 
+    if ((m_state == GameState::Playing || m_state == GameState::Upgrade)
+        && m_pauseButtonRect.contains(event->pos()))
+    {
+        m_paused = !m_paused;
+        return;
+    }
+
     if (m_state == GameState::Upgrade)
     {
         int w = width();
@@ -774,7 +783,8 @@ bool GameWidget::isInLightCone(float wx, float wy) const
     float dy = wy - m_player.y;
     float dist = std::sqrt(dx * dx + dy * dy);
 
-    if (dist > LIGHT_RADIUS)
+    float effRadius = effectiveLightRadius();
+    if (dist > effRadius)
         return false;
 
     if (m_player.ultActive && m_player.ultChargesUsed >= 3)
@@ -793,6 +803,14 @@ float GameWidget::distanceToPlayer(float wx, float wy) const
     float dx = wx - m_player.x;
     float dy = wy - m_player.y;
     return std::sqrt(dx * dx + dy * dy);
+}
+
+float GameWidget::effectiveLightRadius() const
+{
+    float radius = LIGHT_RADIUS;
+    if (m_player.ultActive && m_player.ultChargesUsed >= 3)
+        radius += m_ultUpgradeLevel * 0.5f * UNIT_PX;
+    return radius;
 }
 
 TileType GameWidget::getTileType(int tx, int ty)
@@ -834,6 +852,16 @@ void GameWidget::renderGame(QPainter &painter)
 
     renderLightOverlay(painter);
     renderHUD(painter);
+
+    if (m_paused)
+    {
+        painter.fillRect(rect(), QColor(0, 0, 0, 120));
+        QFont pauseOverlayFont(QStringLiteral("Arial"), 36);
+        pauseOverlayFont.setBold(true);
+        painter.setFont(pauseOverlayFont);
+        painter.setPen(QColor(255, 255, 255, 180));
+        painter.drawText(rect(), Qt::AlignCenter, QStringLiteral("已暂停"));
+    }
 }
 
 void GameWidget::renderMap(QPainter &painter)
@@ -1096,7 +1124,7 @@ void GameWidget::renderLightOverlay(QPainter &painter)
         m_glowOverlay = QPixmap(w, h);
     }
 
-    m_lightOverlay.fill(QColor(0, 0, 0, 80));
+    m_lightOverlay.fill(QColor(0, 0, 0, 100));
 
     QPointF playerScreen = worldToScreen(m_player.x, m_player.y);
 
@@ -1154,8 +1182,8 @@ void GameWidget::renderLightOverlay(QPainter &painter)
         {
             QRadialGradient gradient(playerScreen, effectiveLightRadius);
             gradient.setColorAt(0.0, QColor(255, 200, 100, 0));
-            gradient.setColorAt(0.85, QColor(255, 180, 80, 0));
-            gradient.setColorAt(0.95, QColor(255, 150, 50, 60));
+            gradient.setColorAt(0.80, QColor(255, 180, 80, 0));
+            gradient.setColorAt(0.92, QColor(255, 150, 50, 100));
             gradient.setColorAt(1.0, QColor(255, 100, 30, 0));
             gp.setBrush(gradient);
             gp.setPen(Qt::NoPen);
@@ -1166,7 +1194,7 @@ void GameWidget::renderLightOverlay(QPainter &painter)
             float lightDirAngle = std::atan2(m_mousePos.y() - h / 2.0f, m_mousePos.x() - w / 2.0f);
             float halfAngle = (m_player.lightAngle / 2.0f) * (PI / 180.0f);
 
-            float glowRadius = LIGHT_RADIUS * 1.15f;
+            float glowRadius = LIGHT_RADIUS * 1.2f;
             QPainterPath glowPath;
             glowPath.moveTo(playerScreen);
             int segments = 48;
@@ -1180,8 +1208,8 @@ void GameWidget::renderLightOverlay(QPainter &painter)
 
             QRadialGradient gradient(playerScreen, glowRadius);
             gradient.setColorAt(0.0, QColor(255, 200, 100, 0));
-            gradient.setColorAt(0.7, QColor(255, 180, 80, 0));
-            gradient.setColorAt(0.9, QColor(255, 150, 50, 40));
+            gradient.setColorAt(0.65, QColor(255, 180, 80, 0));
+            gradient.setColorAt(0.85, QColor(255, 150, 50, 80));
             gradient.setColorAt(1.0, QColor(255, 100, 30, 0));
 
             gp.setBrush(gradient);
@@ -1274,10 +1302,25 @@ void GameWidget::renderHUD(QPainter &painter)
     painter.drawText(QRectF(margin, y, w - margin * 2, lineH), Qt::AlignLeft,
                      QStringLiteral("%1  |  %2  |  %3  充能:%4").arg(atkCD, spdCD, ultStr, charges));
 
-    float endBtnW = 90.0f, endBtnH = 32.0f;
+    float endBtnW = 80.0f, endBtnH = 32.0f;
+    float pauseBtnW = 80.0f, pauseBtnH = 32.0f;
     float endBtnX = w - endBtnW - 12.0f;
+    float pauseBtnX = endBtnX - pauseBtnW - 8.0f;
     float endBtnY = 8.0f;
     m_endButtonRect = QRectF(endBtnX, endBtnY, endBtnW, endBtnH);
+    m_pauseButtonRect = QRectF(pauseBtnX, endBtnY, pauseBtnW, pauseBtnH);
+
+    painter.setPen(QPen(QColor(180, 140, 60), 2.0f));
+    painter.setBrush(QColor(40, 30, 20, 200));
+    painter.drawRoundedRect(m_pauseButtonRect, 6.0, 6.0);
+
+    QFont pauseFont = painter.font();
+    pauseFont.setPointSize(11);
+    pauseFont.setBold(true);
+    painter.setFont(pauseFont);
+    painter.setPen(QColor(255, 220, 150));
+    painter.drawText(m_pauseButtonRect, Qt::AlignCenter,
+                     m_paused ? QStringLiteral("继续") : QStringLiteral("暂停"));
 
     painter.setPen(QPen(QColor(180, 60, 60), 2.0f));
     painter.setBrush(QColor(40, 20, 20, 200));
